@@ -767,9 +767,7 @@ class MSSQLQueryBuilder(FetchNextAndOffsetRowsQueryBuilder):
         selectable = ",".join(clause.get_sql(subquery=True, with_alias=True, **kwargs) for clause in self._from)
 
         target = self._from[0]
-        alias_quote_char = kwargs.get("alias_quote_char")
-        if alias_quote_char is None:
-            alias_quote_char = kwargs.get("quote_char")
+        alias_quote_char = kwargs.get("alias_quote_char") or kwargs.get("quote_char")
         if target.alias is not None:
             target_prefix = format_quotes(target.alias, alias_quote_char)
             target_clause = " {target} FROM {selectable}"

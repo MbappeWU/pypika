@@ -99,12 +99,22 @@ class DeleteTests(unittest.TestCase):
             query.get_sql(quote_char="`", alias_quote_char="'", as_keyword=True),
         )
 
-    def test_delete_target_respects_empty_alias_quote_char(self):
+    def test_delete_target_falls_back_to_quote_char_for_empty_alias_quote_char(self):
         customers = Table("customers").as_("c")
 
         query = MSSQLQuery.from_(customers).delete()
 
-        self.assertEqual('DELETE c FROM "customers" "c"', query.get_sql(alias_quote_char=""))
+        self.assertEqual('DELETE "c" FROM "customers" "c"', query.get_sql(alias_quote_char=""))
+
+    def test_delete_target_and_source_quote_complex_alias_consistently(self):
+        customers = Table("customers").as_('customer "alias"')
+
+        query = MSSQLQuery.from_(customers).delete()
+
+        self.assertEqual(
+            'DELETE "customer ""alias""" FROM "customers" "customer ""alias"""',
+            query.get_sql(alias_quote_char=""),
+        )
 
     def test_delete_aliased_target_with_join(self):
         customers = Table("customers").as_("c")
