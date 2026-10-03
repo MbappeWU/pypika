@@ -1,6 +1,6 @@
 import unittest
 
-from pypika import Table
+from pypika import QmarkParameter, Table
 from pypika.analytics import Count
 from pypika.dialects import MSSQLQuery
 from pypika.utils import QueryException
@@ -79,3 +79,78 @@ class SelectTests(unittest.TestCase):
         self.assertEqual(
             'SELECT "sq0"."abc" "a",COUNT(\'*\') FROM (SELECT "abc" FROM "table1") "sq0" GROUP BY "sq0"."abc"', str(q)
         )
+
+
+class DeleteTests(unittest.TestCase):
+    def test_delete_aliased_target(self):
+        customers = Table("customers").as_("c")
+
+        query = MSSQLQuery.from_(customers).where(customers.id == 1).delete()
+
+        self.assertEqual('DELETE "c" FROM "customers" "c" WHERE "c"."id"=1', str(query))
+
+    def test_delete_aliased_target_with_schema_and_custom_quotes(self):
+        customers = Table("customers", schema="sales").as_("customer alias")
+
+        query = MSSQLQuery.from_(customers).delete()
+
+        self.assertEqual(
+            "DELETE 'customer alias' FROM `sales`.`customers` AS 'customer alias'",
+            query.get_sql(quote_char="`", alias_quote_char="'", as_keyword=True),
+        )
+
+    def test_delete_target_respects_empty_alias_quote_char(self):
+        customers = Table("customers").as_("c")
+
+        query = MSSQLQuery.from_(customers).delete()
+
+        self.assertEqual('DELETE c FROM "customers" "c"', query.get_sql(alias_quote_char=""))
+
+    def test_delete_aliased_target_with_join(self):
+        customers = Table("customers").as_("c")
+        orders = Table("orders").as_("o")
+
+        query = MSSQLQuery.from_(customers).join(orders).on(customers.id == orders.customer_id).delete()
+
+        self.assertEqual('DELETE "c" FROM "customers" "c" JOIN "orders" "o" ON "c"."id"="o"."customer_id"', str(query))
+
+    def test_delete_unaliased_target_with_join_declares_target_and_source(self):
+        customers = Table("customers")
+        orders = Table("orders").as_("o")
+
+        query = MSSQLQuery.from_(customers).join(orders).on(customers.id == orders.customer_id).delete()
+
+        self.assertEqual(
+            'DELETE FROM "customers" FROM "customers" JOIN "orders" "o" ON "customers"."id"="o"."customer_id"',
+            str(query),
+        )
+
+    def test_delete_unaliased_target_is_unchanged(self):
+        query = MSSQLQuery.from_(Table("customers")).delete()
+
+        self.assertEqual('DELETE FROM "customers"', str(query))
+
+    def test_delete_from_mssql_table_entry_point(self):
+        customers = Table("customers", query_cls=MSSQLQuery).as_("c")
+
+        query = MSSQLQuery.from_(customers).delete()
+
+        self.assertEqual('DELETE "c" FROM "customers" "c"', str(query))
+
+    def test_delete_builder_reuse_keeps_target_alias(self):
+        customers = Table("customers").as_("c")
+        query = MSSQLQuery.from_(customers).delete()
+
+        self.assertEqual('DELETE "c" FROM "customers" "c"', str(query))
+        self.assertEqual('DELETE "c" FROM "customers" "c" WHERE "c"."id"=1', str(query.where(customers.id == 1)))
+
+    def test_select_from_subquery_does_not_render_parameters_twice(self):
+        customers = Table("customers")
+        inner_query = MSSQLQuery.from_(customers).select(customers.id).where(customers.status == "active")
+        query = MSSQLQuery.from_(inner_query).select("*")
+        parameter = QmarkParameter()
+
+        sql = query.get_sql(parameter=parameter)
+
+        self.assertEqual('SELECT * FROM (SELECT "id" FROM "customers" WHERE "status"=?) "sq0"', sql)
+        self.assertEqual(["active"], parameter.get_parameters())

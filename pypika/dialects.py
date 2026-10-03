@@ -760,6 +760,29 @@ class MSSQLQueryBuilder(FetchNextAndOffsetRowsQueryBuilder):
             select=",".join(term.get_sql(with_alias=True, subquery=True, **kwargs) for term in self._selects),
         )
 
+    def _from_sql(self, with_namespace: bool = False, **kwargs: Any) -> str:
+        if not self._delete_from or not self._from:
+            return super()._from_sql(with_namespace=with_namespace, **kwargs)
+
+        selectable = ",".join(clause.get_sql(subquery=True, with_alias=True, **kwargs) for clause in self._from)
+
+        target = self._from[0]
+        alias_quote_char = kwargs.get("alias_quote_char")
+        if alias_quote_char is None:
+            alias_quote_char = kwargs.get("quote_char")
+        if target.alias is not None:
+            target_prefix = format_quotes(target.alias, alias_quote_char)
+            target_clause = " {target} FROM {selectable}"
+        elif self._joins or len(self._from) > 1:
+            target_prefix = target.get_sql(with_alias=False, **kwargs)
+            target_clause = " FROM {target} FROM {selectable}"
+        else:
+            target_prefix = None
+
+        if target_prefix is None:
+            return " FROM {selectable}".format(selectable=selectable)
+        return target_clause.format(target=target_prefix, selectable=selectable)
+
 
 class ClickHouseQuery(Query):
     """

@@ -1412,6 +1412,23 @@ This produces:
     DELETE FROM "abc"
     FOR PORTION OF "valid_period" FROM '2020-01-01' TO '2020-02-01'
 
+For SQL Server, an aliased delete target is emitted using SQL Server's target
+alias syntax:
+
+.. code-block:: python
+
+    from pypika import Table
+    from pypika.dialects import MSSQLQuery
+
+    customers = Table("customers").as_("c")
+    q = MSSQLQuery.from_(customers).where(customers.id == 1).delete()
+
+This produces:
+
+.. code-block:: sql
+
+    DELETE "c" FROM "customers" "c" WHERE "c"."id"=1
+
 Creating Tables
 ^^^^^^^^^^^^^^^
 
